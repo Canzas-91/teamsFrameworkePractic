@@ -1,0 +1,37 @@
+[
+  {
+    "id": 1,
+    "name": "Dream Team",
+    "creator": "Артём",
+    "description": "Разработка образовательной платформы",
+    "roles": [
+      {
+        "name": "Backend-разработчик",
+        "stack": "python",
+        "min_experience": 2,
+        "vacancies": 1
+      },
+      {
+        "name": "Frontend-разработчик",
+        "stack": "javascript",
+        "min_experience": 1,
+        "vacancies": 1
+      },
+      {
+        "name": "Дизайнер",
+        "stack": "figma",
+        "min_experience": 1,
+        "vacancies": 1
+      }
+    ],
+    "members": []
+  },
+  {
+    "id": 2,
+    "name": "рпр",
+    "creator": "рпрп",
+    "description": "оаопо",
+    "roles": [],
+    "members": []
+  }
+]
