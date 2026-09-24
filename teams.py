@@ -1,137 +1,97 @@
-"""Functions for teams, roles, searching, sorting and statistics."""
+"""Functions for creating, searching and analysing project teams."""
+
+from models import Application, Role, Team, User
 
 
-def _next_id(items: list[dict]) -> int:
+def _next_id(items: list[Team]) -> int:
     """Return an identifier greater than all identifiers in a collection."""
-    return max((item.get("id", 0) for item in items), default=0) + 1
+    return max((item.id for item in items), default=0) + 1
 
 
 def create_team(
-    teams: list[dict],
+    teams: list[Team],
     team_name: str,
-    creator: str,
+    creator: User,
     description: str = "",
-) -> dict:
-    """Create a team and add it to the teams collection."""
-    if not team_name.strip() or not creator.strip():
-        raise ValueError("Название команды и имя создателя обязательны.")
+) -> Team:
+    """Create a team object and add it to the collection."""
+    if not team_name.strip():
+        raise ValueError("Название команды обязательно.")
     normalized_name = team_name.strip().lower()
-    if any(team["name"].lower() == normalized_name for team in teams):
+    if any(team.name.lower() == normalized_name for team in teams):
         raise ValueError("Команда с таким названием уже существует.")
 
-    team = {
-        "id": _next_id(teams),
-        "name": team_name.strip(),
-        "creator": creator.strip(),
-        "description": description.strip(),
-        "roles": [],
-        "members": [],
-    }
+    team = Team(_next_id(teams), team_name, creator, description)
     teams.append(team)
     return team
 
 
-def find_team_by_id(teams: list[dict], team_id: int) -> dict:
+def find_team_by_id(teams: list[Team], team_id: int) -> Team:
     """Return a team by its identifier or raise KeyError."""
     for team in teams:
-        if team["id"] == team_id:
+        if team.id == team_id:
             return team
     raise KeyError(f"Команда с ID {team_id} не найдена.")
 
 
 def add_role(
-    teams: list[dict],
+    teams: list[Team],
     team_id: int,
     role_name: str,
     stack: str,
     min_experience: int,
     vacancies: int = 1,
-) -> dict:
-    """Add a required role to an existing team."""
-    if min_experience < 0 or vacancies < 1:
-        raise ValueError(
-            "Опыт не может быть отрицательным, мест должно быть > 0."
-        )
-    if not role_name.strip() or not stack.strip():
-        raise ValueError("Название роли и стек обязательны.")
-
+) -> Role:
+    """Create a role object and add it to an existing team."""
     team = find_team_by_id(teams, team_id)
-    if any(
-        role["name"].lower() == role_name.strip().lower()
-        for role in team["roles"]
-    ):
-        raise ValueError("Такая роль уже добавлена в команду.")
-
-    role = {
-        "name": role_name.strip(),
-        "stack": stack.strip().lower(),
-        "min_experience": min_experience,
-        "vacancies": vacancies,
-    }
-    team["roles"].append(role)
+    role = Role(role_name, stack, min_experience, vacancies)
+    team.add_role(role)
     return role
 
 
-def find_teams(teams: list[dict], query: str) -> list[dict]:
+def find_teams(teams: list[Team], query: str) -> list[Team]:
     """Find teams by a substring in the name or description."""
     normalized_query = query.strip().lower()
     return [
         team
         for team in teams
-        if normalized_query in team["name"].lower()
-        or normalized_query in team.get("description", "").lower()
+        if normalized_query in team.name.lower()
+        or normalized_query in team.description.lower()
     ]
 
 
-def sort_teams(teams: list[dict]) -> list[dict]:
+def sort_teams(teams: list[Team]) -> list[Team]:
     """Return teams sorted by name without changing the source list."""
-    return sorted(teams, key=lambda team: team["name"].lower())
+    return sorted(teams, key=lambda team: team.name.lower())
 
 
-def selection_for_the_team(
-    role: dict, applicant_stack: str, experience: int
-) -> bool:
-    """Check whether a candidate meets a role's basic requirements."""
-    return (
-        role["stack"].lower() == applicant_stack.strip().lower()
-        and experience >= role["min_experience"]
-    )
+def selection_for_the_team(role: Role, user: User) -> bool:
+    """Check whether a user meets a role's requirements."""
+    return role.is_suitable_for(user)
 
 
-def get_available_roles(team: dict) -> list[str]:
-    """Return role names that still have free places in the team."""
-    occupied = {}
-    for member in team.get("members", []):
-        member_role = member["role"].lower()
-        occupied[member_role] = occupied.get(member_role, 0) + 1
-
-    return [
-        role["name"]
-        for role in team["roles"]
-        if occupied.get(role["name"].lower(), 0) < role["vacancies"]
-    ]
+def get_available_roles(team: Team) -> list[Role]:
+    """Return role objects that still have free places in the team."""
+    return [role for role in team.roles if team.is_role_available(role)]
 
 
-def team_info(team: dict) -> str:
+def team_info(team: Team) -> str:
     """Return a formatted summary of a team."""
-    roles = ", ".join(get_available_roles(team)) or "нет свободных ролей"
-    return (
-        f"#{team['id']} {team['name']} | создатель: {team['creator']} | "
-        f"доступные роли: {roles}"
-    )
+    return str(team)
 
 
-def team_statistics(teams: list[dict], applications: list[dict]) -> dict:
+def team_statistics(
+    teams: list[Team], applications: list[Application]
+) -> dict[str, int | dict[str, int]]:
     """Calculate general statistics for teams and applications."""
     statuses = {"pending": 0, "accepted": 0, "rejected": 0, "cancelled": 0}
     for application in applications:
-        status = application.get("status", "pending")
-        statuses[status] = statuses.get(status, 0) + 1
+        statuses[application.status] = statuses.get(application.status, 0) + 1
 
     return {
         "teams": len(teams),
-        "roles": sum(len(team["roles"]) for team in teams),
-        "members": sum(len(team.get("members", [])) for team in teams),
+        "roles": sum(len(team.roles) for team in teams),
+        "members": sum(len(team.members) for team in teams),
         "applications": len(applications),
         "applications_by_status": statuses,
     }

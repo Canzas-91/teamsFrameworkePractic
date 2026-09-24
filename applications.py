@@ -1,126 +1,98 @@
 """Functions for submitting, cancelling and reviewing applications."""
 
-from teams import find_team_by_id, selection_for_the_team
+from models import Application, Team, User
+from teams import find_team_by_id
 
 
 class ApplicationError(ValueError):
+    """Error caused by an invalid operation with an application."""
 
 
-def _next_id(applications: list[dict]) -> int:
+def _next_id(applications: list[Application]) -> int:
     """Return the next application identifier."""
-    return max(
-        (application.get("id", 0) for application in applications),
-        default=0,
-    ) + 1
+    return max((application.id for application in applications), default=0) + 1
 
 
-def _find_role(team: dict, role_name: str) -> dict:
-    """Return a role by name or raise ApplicationError."""
-    for role in team["roles"]:
-        if role["name"].lower() == role_name.strip().lower():
-            return role
-    raise ApplicationError("Указанная роль не найдена в команде.")
-
-
-def _find_application(applications: list[dict], application_id: int) -> dict:
+def _find_application(
+    applications: list[Application], application_id: int
+) -> Application:
     """Return an application by identifier or raise ApplicationError."""
     for application in applications:
-        if application["id"] == application_id:
+        if application.id == application_id:
             return application
     raise ApplicationError(f"Заявка с ID {application_id} не найдена.")
 
 
-def is_role_available(team: dict, role_name: str) -> bool:
+def is_role_available(team: Team, role_name: str) -> bool:
     """Check whether a team has a free place for the selected role."""
-    role = _find_role(team, role_name)
-    occupied_places = sum(
-        member["role"].lower() == role["name"].lower()
-        for member in team.get("members", [])
-    )
-    return occupied_places < role["vacancies"]
+    try:
+        role = team.find_role(role_name)
+    except ValueError as error:
+        raise ApplicationError(str(error)) from error
+    return team.is_role_available(role)
 
 
 def submit_application(
-    teams: list[dict],
-    applications: list[dict],
+    teams: list[Team],
+    applications: list[Application],
     team_id: int,
-    applicant: str,
+    applicant: User,
     role_name: str,
-    stack: str,
-    experience: int,
-) -> dict:
-    if not applicant.strip():
-        raise ApplicationError("Имя кандидата не может быть пустым.")
-    if experience < 0:
-        raise ApplicationError("Опыт не может быть отрицательным.")
-
+) -> Application:
+    """Validate a user profile and add a pending application object."""
     team = find_team_by_id(teams, team_id)
-    role = _find_role(team, role_name)
-    if not is_role_available(team, role_name):
+    try:
+        role = team.find_role(role_name)
+    except ValueError as error:
+        raise ApplicationError(str(error)) from error
+
+    if not team.is_role_available(role):
         raise ApplicationError("На выбранную роль нет свободных мест.")
-    if not selection_for_the_team(role, stack, experience):
+    if not role.is_suitable_for(applicant):
         raise ApplicationError(
             "Стек или опыт не соответствуют требованиям роли."
         )
 
     duplicate = any(
-        application["team_id"] == team_id
-        and application["applicant"].lower() == applicant.strip().lower()
-        and application["role"].lower() == role["name"].lower()
-        and application["status"] in {"pending", "accepted"}
+        application.team.id == team_id
+        and application.applicant.id == applicant.id
+        and application.role.name.lower() == role.name.lower()
+        and application.status in {"pending", "accepted"}
         for application in applications
     )
     if duplicate:
-        raise ApplicationError("Активная заявка кандидата уже существует.")
+        raise ApplicationError("Активная заявка пользователя уже существует.")
 
-    application = {
-        "id": _next_id(applications),
-        "team_id": team_id,
-        "applicant": applicant.strip(),
-        "role": role["name"],
-        "stack": stack.strip().lower(),
-        "experience": experience,
-        "status": "pending",
-    }
+    application = Application(
+        _next_id(applications), team, applicant, role
+    )
     applications.append(application)
     return application
 
 
 def cancel_application(
-    applications: list[dict], application_id: int
-) -> dict:
-    """Cancel a pending application."""
+    applications: list[Application], application_id: int
+) -> Application:
+    """Cancel a pending application through the object's method."""
     application = _find_application(applications, application_id)
-    if application["status"] != "pending":
-        raise ApplicationError("Отменить можно только ожидающую заявку.")
-    application["status"] = "cancelled"
+    try:
+        application.cancel()
+    except ValueError as error:
+        raise ApplicationError(str(error)) from error
     return application
 
 
 def review_application(
-    teams: list[dict],
-    applications: list[dict],
+    teams: list[Team],
+    applications: list[Application],
     application_id: int,
     decision: str,
-) -> dict:
-    """Accept or reject a pending application."""
-    if decision not in {"accepted", "rejected"}:
-        raise ApplicationError("Решение должно быть accepted или rejected.")
-
+) -> Application:
+    """Accept or reject a pending application through the object's method."""
+    del teams  # the application already references its Team object
     application = _find_application(applications, application_id)
-    if application["status"] != "pending":
-        raise ApplicationError("Заявка уже рассмотрена или отменена.")
-
-    team = find_team_by_id(teams, application["team_id"])
-    if decision == "accepted":
-        if not is_role_available(team, application["role"]):
-            raise ApplicationError("Свободное место на роль уже занято.")
-        team.setdefault("members", []).append(
-            {
-                "name": application["applicant"],
-                "role": application["role"],
-            }
-        )
-
-    application["status"] = decision
+    try:
+        application.review(decision)
+    except ValueError as error:
+        raise ApplicationError(str(error)) from error
     return application

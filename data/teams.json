@@ -2,7 +2,7 @@
   {
     "id": 1,
     "name": "Dream Team",
-    "creator": "Артём",
+    "creator_id": 1,
     "description": "Разработка образовательной платформы",
     "roles": [
       {
@@ -24,12 +24,17 @@
         "vacancies": 1
       }
     ],
-    "members": []
+    "members": [
+      {
+        "user_id": 2,
+        "role": "Backend-разработчик"
+      }
+    ]
   },
   {
     "id": 2,
     "name": "рпр",
-    "creator": "рпрп",
+    "creator_id": 3,
     "description": "оаопо",
     "roles": [],
     "members": []

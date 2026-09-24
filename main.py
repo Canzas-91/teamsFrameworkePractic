@@ -8,7 +8,15 @@ from applications import (
     review_application,
     submit_application,
 )
-from storage import load_json, save_json
+from models import Application, Team, User
+from storage import (
+    load_applications,
+    load_teams,
+    load_users,
+    save_applications,
+    save_teams,
+    save_users,
+)
 from teams import (
     add_role,
     create_team,
@@ -16,39 +24,33 @@ from teams import (
     find_teams,
     get_available_roles,
     sort_teams,
-    team_info,
     team_statistics,
 )
+from users import add_user, find_user_by_id, show_users
 from utils import input_int
 
 DATA_DIR = Path(__file__).parent / "data"
 TEAMS_FILE = DATA_DIR / "teams.json"
+USERS_FILE = DATA_DIR / "users.json"
 APPLICATIONS_FILE = DATA_DIR / "applications.json"
 
 
-def show_teams(teams: list[dict]) -> None:
+def show_teams(teams: list[Team]) -> None:
     """Print all teams and their available roles."""
     if not teams:
         print("Команды пока не созданы.")
         return
-
     for team in teams:
-        print(team_info(team))
+        print(team)
 
 
-def show_applications(applications: list[dict]) -> None:
-    """Print all submitted applications."""
+def show_applications(applications: list[Application]) -> None:
+    """Print all submitted application objects."""
     if not applications:
         print("Заявок пока нет.")
         return
-
     for application in applications:
-        print(
-            f"#{application['id']}: {application['applicant']} -> "
-            f"команда {application['team_id']}, "
-            f"роль {application['role']}, "
-            f"статус: {application['status']}"
-        )
+        print(application)
 
 
 def print_menu() -> None:
@@ -57,29 +59,43 @@ def print_menu() -> None:
         "\n=== Система подбора участников в команду ===\n"
         "1. Показать команды\n"
         "2. Найти команду\n"
-        "3. Создать команду\n"
-        "4. Добавить роль\n"
-        "5. Показать доступные роли\n"
-        "6. Подать заявку\n"
-        "7. Отменить заявку\n"
-        "8. Рассмотреть заявку\n"
-        "9. Показать заявки\n"
-        "10. Показать статистику\n"
+        "3. Добавить пользователя\n"
+        "4. Показать пользователей\n"
+        "5. Создать команду\n"
+        "6. Добавить роль\n"
+        "7. Показать доступные роли\n"
+        "8. Подать заявку\n"
+        "9. Отменить заявку\n"
+        "10. Рассмотреть заявку\n"
+        "11. Показать заявки\n"
+        "12. Показать статистику\n"
         "0. Выход"
     )
 
 
-def handle_create_team(teams: list[dict]) -> None:
-    """Read team data and append a new team."""
+def handle_add_user(users: list[User]) -> None:
+    """Read profile data and create a User object."""
+    name = input("Имя пользователя: ").strip()
+    email = input("Email: ").strip()
+    stack = input("Основной стек: ").strip()
+    experience = input_int("Опыт (лет): ", minimum=0)
+    add_user(users, name, email, stack, experience)
+    user = users[-1]
+    print(f"Пользователь #{user.id} создан.")
+
+
+def handle_create_team(teams: list[Team], users: list[User]) -> None:
+    """Read team data and create a Team linked to its creator."""
     name = input("Название команды: ").strip()
-    creator = input("Имя создателя: ").strip()
+    creator_id = input_int("ID пользователя-создателя: ", minimum=1)
+    creator = find_user_by_id(users, creator_id)
     description = input("Описание проекта: ").strip()
     team = create_team(teams, name, creator, description)
-    print(f"Команда «{team['name']}» создана.")
+    print(f"Команда «{team.name}» создана.")
 
 
-def handle_add_role(teams: list[dict]) -> None:
-    """Read role data and add it to a team."""
+def handle_add_role(teams: list[Team]) -> None:
+    """Read role data and add a Role object to a team."""
     team_id = input_int("ID команды: ", minimum=1)
     role_name = input("Название роли: ").strip()
     stack = input("Требуемый стек: ").strip()
@@ -90,28 +106,23 @@ def handle_add_role(teams: list[dict]) -> None:
 
 
 def handle_submit_application(
-    teams: list[dict], applications: list[dict]
+    teams: list[Team],
+    users: list[User],
+    applications: list[Application],
 ) -> None:
-    """Read candidate data and create an application."""
+    """Create an Application linked to existing objects."""
     team_id = input_int("ID команды: ", minimum=1)
-    applicant = input("Имя кандидата: ").strip()
+    user_id = input_int("ID пользователя: ", minimum=1)
+    applicant = find_user_by_id(users, user_id)
     role_name = input("Желаемая роль: ").strip()
-    stack = input("Ваш основной стек: ").strip()
-    experience = input_int("Опыт (лет): ", minimum=0)
     application = submit_application(
-        teams,
-        applications,
-        team_id,
-        applicant,
-        role_name,
-        stack,
-        experience,
+        teams, applications, team_id, applicant, role_name
     )
-    print(f"Заявка #{application['id']} отправлена.")
+    print(f"Заявка #{application.id} отправлена.")
 
 
 def handle_review_application(
-    teams: list[dict], applications: list[dict]
+    teams: list[Team], applications: list[Application]
 ) -> None:
     """Accept or reject an application."""
     application_id = input_int("ID заявки: ", minimum=1)
@@ -123,16 +134,20 @@ def handle_review_application(
     print("Решение сохранено.")
 
 
-def save_data(teams: list[dict], applications: list[dict]) -> None:
-    """Save all application data to JSON files."""
-    save_json(TEAMS_FILE, teams)
-    save_json(APPLICATIONS_FILE, applications)
+def save_data(
+    teams: list[Team], users: list[User], applications: list[Application]
+) -> None:
+    """Convert all domain objects and save them to JSON files."""
+    save_users(USERS_FILE, users)
+    save_teams(TEAMS_FILE, teams)
+    save_applications(APPLICATIONS_FILE, applications)
 
 
 def main() -> None:
-    """Load data and run the main menu loop."""
-    teams = load_json(TEAMS_FILE, [])
-    applications = load_json(APPLICATIONS_FILE, [])
+    """Load object collections and run the main menu loop."""
+    users = load_users(USERS_FILE)
+    teams = load_teams(TEAMS_FILE, users)
+    applications = load_applications(APPLICATIONS_FILE, teams, users)
 
     while True:
         print_menu()
@@ -140,7 +155,7 @@ def main() -> None:
 
         try:
             if choice == "0":
-                save_data(teams, applications)
+                save_data(teams, users, applications)
                 print("Данные сохранены. До свидания!")
                 break
             if choice == "1":
@@ -148,30 +163,39 @@ def main() -> None:
             elif choice == "2":
                 show_teams(find_teams(teams, input("Строка поиска: ")))
             elif choice == "3":
-                handle_create_team(teams)
-                save_data(teams, applications)
+                handle_add_user(users)
+                save_data(teams, users, applications)
             elif choice == "4":
-                handle_add_role(teams)
-                save_data(teams, applications)
+                show_users(users)
             elif choice == "5":
-                team_id = input_int("ID команды: ", minimum=1)
-                team = find_team_by_id(teams, team_id)
-                roles = get_available_roles(team)
-                print("Доступные роли:", ", ".join(roles) or "нет")
+                handle_create_team(teams, users)
+                save_data(teams, users, applications)
             elif choice == "6":
-                handle_submit_application(teams, applications)
-                save_data(teams, applications)
+                handle_add_role(teams)
+                save_data(teams, users, applications)
             elif choice == "7":
+                team = find_team_by_id(
+                    teams, input_int("ID команды: ", minimum=1)
+                )
+                roles = get_available_roles(team)
+                print(
+                    "Доступные роли:",
+                    ", ".join(role.name for role in roles) or "нет",
+                )
+            elif choice == "8":
+                handle_submit_application(teams, users, applications)
+                save_data(teams, users, applications)
+            elif choice == "9":
                 application_id = input_int("ID заявки: ", minimum=1)
                 cancel_application(applications, application_id)
-                save_data(teams, applications)
+                save_data(teams, users, applications)
                 print("Заявка отменена.")
-            elif choice == "8":
-                handle_review_application(teams, applications)
-                save_data(teams, applications)
-            elif choice == "9":
-                show_applications(applications)
             elif choice == "10":
+                handle_review_application(teams, applications)
+                save_data(teams, users, applications)
+            elif choice == "11":
+                show_applications(applications)
+            elif choice == "12":
                 print(team_statistics(teams, applications))
             else:
                 print("Неизвестный пункт меню.")

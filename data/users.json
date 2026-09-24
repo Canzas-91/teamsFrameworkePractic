@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "name": "Артём",
+    "email": "артём@local.invalid",
+    "stack": "",
+    "experience": 0
+  },
+  {
+    "id": 2,
+    "name": "ааа",
+    "email": "ааа@local.invalid",
+    "stack": "python",
+    "experience": 3
+  },
+  {
+    "id": 3,
+    "name": "рпрп",
+    "email": "рпрп@local.invalid",
+    "stack": "",
+    "experience": 0
+  }
+]
