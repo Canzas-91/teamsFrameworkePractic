@@ -4,7 +4,6 @@ from teams import find_team_by_id, selection_for_the_team
 
 
 class ApplicationError(ValueError):
-    """Error caused by an invalid operation with an application."""
 
 
 def _next_id(applications: list[dict]) -> int:
@@ -50,7 +49,6 @@ def submit_application(
     stack: str,
     experience: int,
 ) -> dict:
-    """Validate candidate data and add a pending application."""
     if not applicant.strip():
         raise ApplicationError("Имя кандидата не может быть пустым.")
     if experience < 0:
