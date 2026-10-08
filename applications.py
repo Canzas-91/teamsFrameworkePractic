@@ -17,10 +17,20 @@ def _find_application(
     applications: list[Application], application_id: int
 ) -> Application:
     """Return an application by identifier or raise ApplicationError."""
+    application = find_application_by_id(applications, application_id)
+    if application is not None:
+        return application
+    raise ApplicationError(f"Заявка с ID {application_id} не найдена.")
+
+
+def find_application_by_id(
+    applications: list[Application], application_id: int
+) -> Application | None:
+    """Return an application by identifier or None if it does not exist."""
     for application in applications:
         if application.id == application_id:
             return application
-    raise ApplicationError(f"Заявка с ID {application_id} не найдена.")
+    return None
 
 
 def is_role_available(team: Team, role_name: str) -> bool:
